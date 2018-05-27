@@ -1,12 +1,23 @@
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
 #include <EEPROM.h>
 #include <SoftwareSerial.h>
-SoftwareSerial BT(10,11); //10 RX, 11 TX.
-SoftwareSerial SIM900(7,8);
 
-int green = 4; //led indica dispositivo configurado.
-int red = 5;   //led indica dispositivo no configurado.
-int cerrar = 6;//led indica cerrar valvula.
+//Declaremos los pines CE y el CSN
+#define CE_PIN 9
+#define CSN_PIN 10
+
+SoftwareSerial SIM900(7,8);
+SoftwareSerial BT(4,5); //4 RX, 5 TX.
+
+byte direccion[5] ={'c','a','n','a','l'};
+RF24 radio(CE_PIN, CSN_PIN);
+int green = 2; //led indica dispositivo configurado.
+int red = 3;   //led indica dispositivo no configurado.
+//int cerrar = 6;//led indica cerrar valvula.
 int gasVal = A0;
+int pushB = 6;
 int primerInicio = 0;
 char cadena[255]; //cadena del mensaje recibido para la configuracion.7hh
 String configTel = "AT+CMGS=\"+52";
@@ -27,16 +38,19 @@ void setup() {
   SIM900.begin(19200);
   Serial.begin(19200);
   BT.begin(9600);
+  radio.begin();
   pinMode(green,OUTPUT);
   pinMode(red,OUTPUT);
-  pinMode(cerrar,OUTPUT);
   pinMode(gasVal,INPUT);
+  pinMode(pushB,INPUT_PULLUP);
   delay(1000);
   delay(15000);
+  radio.openWritingPipe(direccion);
   primerInicio = configurado();
 }
 
 void loop() {
+  int leePush = digitalRead(pushB);
   if(!primerInicio){
     configura();
   }
@@ -45,6 +59,11 @@ void loop() {
     cadena=BT.readString();
     Serial.println(cadena);
     separa(cadena);
+  }
+  else if(leePush == 0){
+    char datos[16] = "apaga";
+    radio.write(datos,sizeof(datos));
+    delay(200);
   }
   else{
     sensorGas();
@@ -78,8 +97,9 @@ void sensorGas(){
   if (gasPercentage >= 20){
     Serial.println(datosS.telefono);
     String numero(datosS.telefono);
+    char datos[16] = "gas";
+    radio.write(datos,sizeof(datos));
     mensaje_sms(numero);
-    digitalWrite(cerrar, HIGH);
   }
 }
 
